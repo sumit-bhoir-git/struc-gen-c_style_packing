@@ -10,12 +10,38 @@ import (
 	"path/filepath"
 	"runtime/debug"
 
+	// added imports
+    "regexp"
+    "strconv"
+
 	"github.com/dave/jennifer/jen"
 	"github.com/m29h/struc-gen/cmd/struc-gen/internal/generator"
 	"golang.org/x/tools/go/packages"
+
 )
 
 var little = flag.Bool("little", false, "set default byteorder to little-endian")
+
+// new pack flag
+var packFlag = flag.Int("pack", 0, "default packing alignment (0=natural, 1=byte, 2=word)")
+
+var pragmaRe = regexp.MustCompile(`#pragma pack\((\d+)\)`)
+
+func parsePackFromFile(path string, defaultPack int) (int, error) {
+    data, err := os.ReadFile(path)
+    if err != nil {
+        return defaultPack, err
+    }
+    if m := pragmaRe.FindStringSubmatch(string(data)); m != nil {
+        if v, err := strconv.Atoi(m[1]); err == nil {
+            // accept only 0,1,2 (adapt if you want larger pack values)
+            if v == 0 || v == 1 || v == 2 {
+                return v, nil
+            }
+        }
+    }
+    return defaultPack, nil
+}
 
 func main() {
 
@@ -92,7 +118,14 @@ func generate(pkg *packages.Package, t map[string]*types.Struct) error {
 		if *little {
 			defaultByteorder = binary.LittleEndian
 		}
-		mb := generator.NewMethodBuilder(sourceTypeName, structType, defaultByteorder)
+
+		// determine pack for this file (pragma in file overrides -pack)
+        filePack := *packFlag
+        if p, err := parsePackFromFile(pkg.CompiledGoFiles[0], *packFlag); err == nil {
+            filePack = p
+        }
+		
+		mb := generator.NewMethodBuilder(sourceTypeName, structType, defaultByteorder,filePack)
 		f.Add(mb.MakeMethods())
 	}
 

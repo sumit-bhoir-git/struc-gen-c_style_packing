@@ -39,22 +39,31 @@ type StrucTag struct {
 func (t *StrucTag) setContext(context *Context) {
 	t.context = context
 
-	if t.context.checkBound == nil || t.FieldType() != Const {
-		t.beforeStatement.Add(t.context.insertNewCheckBound())
-	}
+    if t.context.checkBound == nil || t.FieldType() != Const {
+        t.beforeStatement.Add(t.context.insertNewCheckBound())
+    }
 
-	if t.FieldType() == SelfContained || t.ElementBitLen() >= 8 {
-		//align staticBitPos when needed (transition from bitfield to larger types)
-		if t.context.dynamicBitPos == nil {
-			// byte-align at compile-time for fully constant sized types
-			if t.context.staticBitPos%8 != 0 {
-				t.context.staticBitPos += 8 - t.context.staticBitPos%8
-			}
-		} else {
-			//byte align by flushing the context
-			t.beforeStatement.Add(t.context.Flush())
-		}
-	}
+    if t.FieldType() == SelfContained || t.ElementBitLen() >= 8 {
+        // align staticBitPos when needed (transition from bitfield to larger types)
+        if t.context.dynamicBitPos == nil {
+            // compute natural byte alignment for this element (bytes)
+            bytesAlign := 1
+            if t.ElementBitLen() >= 8 {
+                bytesAlign = t.ElementBitLen() / 8
+            }
+            // if Pack is set, limit alignment to Pack
+            if t.context != nil && t.context.Pack > 0 && t.context.Pack < bytesAlign {
+                bytesAlign = t.context.Pack
+            }
+            bitAlign := bytesAlign * 8
+            if t.context.staticBitPos%bitAlign != 0 {
+                t.context.staticBitPos += bitAlign - (t.context.staticBitPos % bitAlign)
+            }
+        } else {
+            // byte align by flushing the context
+            t.beforeStatement.Add(t.context.Flush())
+        }
+    }
 }
 func (t StrucTag) bytePos(offset int) *jen.Statement {
 	p := jen.Id("m")

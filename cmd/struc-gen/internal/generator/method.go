@@ -13,13 +13,15 @@ type MethodBuilder struct {
 	structType       *types.Struct
 	sourceTypeName   string
 	defaultByteorder binary.ByteOrder
+	Pack             int // new: packing directive (0=natural, >0=pack bytes)
 }
 
-func NewMethodBuilder(TypeName string, Type *types.Struct, defaultByteorder binary.ByteOrder) *MethodBuilder {
+func NewMethodBuilder(TypeName string, Type *types.Struct, defaultByteorder binary.ByteOrder, pack int) *MethodBuilder {
 	return &MethodBuilder{
 		structType:       Type,
 		sourceTypeName:   TypeName,
 		defaultByteorder: defaultByteorder,
+		Pack:             pack,
 	}
 }
 
@@ -28,8 +30,10 @@ func (m *MethodBuilder) MakeMethodCode(gen structag.TagPrompter) ([]jen.Code, er
 
 	funcBlock = append(funcBlock, jen.Id("m").Op(":=").Lit(0))
 
-	ctx := &structag.Context{}
-
+	// propagate Pack into the structag context used by tags/layout
+	ctx := &structag.Context{
+		Pack: m.Pack,
+	}
 	for i := 0; i < m.structType.NumFields(); i++ {
 
 		tag, err := structag.NewStrucTag(ctx, m.structType.Field(i), m.structType.Tag(i), m.defaultByteorder)
